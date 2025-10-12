@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-vault-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-vault-app
+  template:
+    metadata:
+      annotations:
+        # 1. Activation de l'Injector
+        vault.hashicorp.com/agent-inject: "true"
+        # 2. Rôle Vault
+        vault.hashicorp.com/role: "db-app-role"
+        # 3. Secret dynamique à injecter et nom du fichier de destination
+        vault.hashicorp.com/agent-inject-secret-db-creds.properties: "database/creds/db_users-app-role"
+        # 4. Template pour le formatage des propriétés
+        vault.hashicorp.com/agent-inject-template-db-creds.properties: |
+          spring.datasource.url=jdbc:postgresql://postgresql.default.svc.cluster.local:5432/db_users
+          spring.datasource.username={{ with secret "database/creds/db_users-app-role" }}{{ .Data.username }}{{ end }}
+          spring.datasource.password={{ with secret "database/creds/db_users-app-role" }}{{ .Data.password }}{{ end }}
+          spring.jpa.hibernate.ddl-auto=update
+      labels:
+        app: spring-vault-app
+    spec:
+      serviceAccountName: db-app-sa
+      containers:
+        - name: spring-app-container
+          image: spring-app:v1
+          ports:
+            - containerPort: 8080
